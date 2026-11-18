@@ -23,7 +23,9 @@ jobs:
       - name: ALSA and udev headers
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
       - name: Build
-        run: cargo build --locked --release -p horizon-game --bin horizon-client -p horizon-prepare
+        run: |
+          cargo build --locked --release -p horizon-game --bin horizon-client
+          cargo build --locked --release -p horizon-prepare
       - name: Collect
         run: |
           mkdir -p out
