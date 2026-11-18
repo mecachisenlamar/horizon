@@ -4234,7 +4234,14 @@ mod emissive_tests {
             let mut m = silverfish();
             {
                 let textures = data.random_textures.read().unwrap();
-                crate::mobs::random_textures::choose(&mut m, &textures, &data, Some(seen()), 0, None);
+                crate::mobs::random_textures::choose(
+                    &mut m,
+                    &textures,
+                    &data,
+                    Some(seen()),
+                    0,
+                    None,
+                );
             }
             let v = drawn(&m, &data, &atlas);
             assert!(inside(&v[..4], 0.5), "the variant");

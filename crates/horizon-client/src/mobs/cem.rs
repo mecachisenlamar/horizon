@@ -107,6 +107,25 @@ impl CemModels {
         files: &BTreeMap<String, Vec<String>>,
         vanilla: &HashMap<&str, (&Arc<Part>, &str)>,
     ) -> (Self, Vec<String>) {
+        // Random models with no `.jem` of their own (EMF's default, "require base model" off):
+        // a `<name>.properties` alone makes `<name>.jem` the vanilla model, variant 1, for the
+        // layer the name is its own (never a fallback: a baby doesn't take the adult's variants).
+        let mut all = files.clone();
+        let mut bare: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for base in ["assets/minecraft/emf/cem", "assets/minecraft/optifine/cem"] {
+            for path in root.list(&format!("{base}/")) {
+                let Some(model) = path[base.len() + 1..]
+                    .strip_suffix(".properties")
+                    .filter(|model| !model.contains('/') && !files.contains_key(*model))
+                else {
+                    continue;
+                };
+                let jem = format!("{base}/{model}.jem");
+                all.entry(model.to_owned()).or_default().push(jem.clone());
+                bare.insert(jem);
+            }
+        }
+        let files = &all;
         // Every model name a file can shape: the files' own, and the names that fall back to
         // them, a chain of fallbacks deep.
         let mut names: BTreeSet<String> = files.keys().cloned().collect();
@@ -150,15 +169,27 @@ impl CemModels {
             candidates.sort_by_key(|&(depth, _)| depth);
             let found = candidates
                 .iter()
-                .flat_map(move |&(_, name)| {
-                    files[name].iter().map(move |path| (name, path.as_str()))
+                .flat_map(move |&(depth, name)| {
+                    files[name]
+                        .iter()
+                        .map(move |path| (depth, name, path.as_str()))
                 })
-                .find(|&(_, path)| {
+                .find(|&(depth, _, path)| {
+                    if bare.contains(path) {
+                        if depth > 0 {
+                            return false;
+                        }
+                        parsed
+                            .entry(path)
+                            .or_insert_with(|| Some(EntityModel::default()));
+                        return true;
+                    }
                     parsed
                         .entry(path)
                         .or_insert_with(|| load_jem(root, path))
                         .is_some()
-                });
+                })
+                .map(|(_, name, path)| (name, path));
             let Some((name, path)) = found else {
                 continue;
             };

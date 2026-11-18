@@ -480,7 +480,14 @@ mod tests {
         Arc::make_mut(&mut m.kind).id = "minecraft:wolf".into();
         m.extra.variant = 7;
         let body = "entity/wolf/wolf_chestnut";
-        choose(&mut m, &t, &data(), Some(seen("minecraft:plains")), 0, Some([1, 2, 3, 4]));
+        choose(
+            &mut m,
+            &t,
+            &data(),
+            Some(seen("minecraft:plains")),
+            0,
+            Some([1, 2, 3, 4]),
+        );
         let third = variant("entity/wolf/wolf_chestnut3");
         assert_eq!(texture(&m, &t, body), Some(third.as_str()));
         m.custom_name = Some("Rex".into());
@@ -525,7 +532,14 @@ mod tests {
             ],
         );
         let mut m = mob(Species::Warden);
-        choose(&mut m, &t, &data(), Some(seen("minecraft:deep_dark")), 0, None);
+        choose(
+            &mut m,
+            &t,
+            &data(),
+            Some(seen("minecraft:deep_dark")),
+            0,
+            None,
+        );
         let spots = variant("entity/warden/warden_pulsating_spots_2.2");
         assert_eq!(
             texture(&m, &t, "entity/warden/warden_pulsating_spots_2"),
@@ -584,10 +598,24 @@ mod tests {
             ],
         );
         let mut plains = mob(Species::Sheep);
-        choose(&mut plains, &t, &data(), Some(seen("minecraft:plains")), 0, None);
+        choose(
+            &mut plains,
+            &t,
+            &data(),
+            Some(seen("minecraft:plains")),
+            0,
+            None,
+        );
         assert_eq!(texture(&plains, &t, WOOL), None);
         let mut desert = mob(Species::Sheep);
-        choose(&mut desert, &t, &data(), Some(seen("minecraft:desert")), 0, None);
+        choose(
+            &mut desert,
+            &t,
+            &data(),
+            Some(seen("minecraft:desert")),
+            0,
+            None,
+        );
         assert_eq!(
             texture(&desert, &t, WOOL),
             Some("minecraft:etf/random/entity/sheep/sheep_wool2")
