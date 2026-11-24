@@ -124,6 +124,27 @@ impl Game<'_> {
             (sky.star_brightness > 0.0).then(|| (frame(sky.star_angle), sky.star_brightness));
         (out, stars)
     }
+    /// The atlas entry and model width that the first-person arms use, including
+    /// the fallback when the player's skin has not reached the atlas.
+    fn first_person_arm_skin(&self) -> Option<(&str, &horizon_client::hud::Rect, bool)> {
+        let model = self.player_model.as_ref();
+        let slim = model.is_some_and(|m| m.slim);
+        let sprites = &self.gui.atlas.sprites;
+        let (sprite, rect) = model
+            .and_then(|m| m.skin.as_deref())
+            .and_then(|skin| sprites.get_key_value(skin))
+            .or_else(|| sprites.get_key_value("entity/player/wide/steve"))?;
+        Some((sprite.as_str(), rect, slim))
+    }
+
+    pub(in crate::game) fn local_player_arm_skin(&self) -> Option<(&str, bool)> {
+        if !self.native_window() || self.player.is_none() {
+            return None;
+        }
+        self.first_person_arm_skin()
+            .map(|(sprite, _, slim)| (sprite, slim))
+    }
+
     /// `renderPlayerHand` (`AvatarRenderer.renderHand`): the player's own
     /// `left` or right arm with its skin at pose `m`, in its rest pose
     /// turned 0.1 radians outwards. Mods are asked first (`RenderArmEvent`)
@@ -161,20 +182,10 @@ impl Game<'_> {
                 return;
             }
         }
-        let slim = self.player_model.as_ref().is_some_and(|m| m.slim);
-        let Some(arm) = self.res.player_arm(slim, left).as_ref() else {
+        let Some((_, r, slim)) = self.first_person_arm_skin() else {
             return;
         };
-        // The player's own skin, as the inventory's model shows it.
-        let sprites = &self.gui.atlas.sprites;
-        let Some(r) = self
-            .player_model
-            .as_ref()
-            .and_then(|m| m.skin.as_deref())
-            .and_then(|skin| sprites.get(skin))
-            .or_else(|| sprites.get("entity/player/wide/steve"))
-            .copied()
-        else {
+        let Some(arm) = self.res.player_arm(slim, left).as_ref() else {
             return;
         };
         let z_rot = if left { -0.1 } else { 0.1 };
@@ -408,8 +419,9 @@ impl Game<'_> {
                     remaining: owner.use_item_remaining_ticks as f32,
                     partial: a,
                 },
-                Some(ItemUseState::Other(animation)) => item_use::use_pose(
+                Some(ItemUseState::Other(animation)) => item_use::held_use_pose(
                     animation,
+                    &*stack.item == "minecraft:shield",
                     owner.use_item_remaining_ticks as f32,
                     owner.use_duration as f32,
                     a,
@@ -514,6 +526,10 @@ impl Game<'_> {
         // The 32x32 direction table supports at most a 15-block radius.
         let radius = self.settings.weather_radius.clamp(0, 15);
         let eye = camera.to_array();
+        let view = self
+            .view_frustum
+            .as_ref()
+            .filter(|_| self.pack_ids.is_none() && self.native_shaders.picked.is_empty());
         let mut rain = Vec::new();
         let mut snow_vertices = Vec::new();
         // Saturation keeps extreme camera coordinates from overflowing the loop.
@@ -524,6 +540,12 @@ impl Game<'_> {
                 let y1 = cy.saturating_add(radius).max(top);
                 if y1 == y0 {
                     continue;
+                }
+                if let Some(view) = view {
+                    let (lo, hi) = weather::column_bounds(x, y0, y1, z, eye);
+                    if !view.intersects(glam::Vec3::from_array(lo), glam::Vec3::from_array(hi)) {
+                        continue;
+                    }
                 }
                 let Some(snow) = self.precipitation(x, cy, z) else {
                     continue;
@@ -676,5 +698,13 @@ mod crack_sprite_tests {
                 translucent: classic
             })
         );
+    }
+
+    #[test]
+    fn weather_column_bounds_strictly_enclose_column_quad() {
+        let camera = [0.0, 70.0, 0.0];
+        let (lo, hi) = horizon_client::weather::column_bounds(5, 60, 80, -10, camera);
+        assert_eq!(lo, [4.5, -10.0, -10.5]);
+        assert_eq!(hi, [6.5, 10.0, -8.5]);
     }
 }

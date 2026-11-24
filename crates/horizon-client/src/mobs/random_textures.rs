@@ -123,11 +123,12 @@ pub fn choose(
     m: &mut Mob,
     textures: &RandomTextures,
     data: &MobData,
+    worn: &super::render::WornArmor,
     seen: Option<Seen>,
     seed: i32,
     uuid_of: &dyn Fn(u32) -> Option<[i32; 4]>,
 ) {
-    let names = super::render::drawn_textures(m, data);
+    let names = super::render::drawn_textures(m, data, worn);
     let mut choice = std::mem::take(&mut m.random_textures);
     if choice.seen.is_none() {
         choice.seen = seen;
@@ -356,6 +357,7 @@ mod tests {
             &mut m,
             &t,
             &data,
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &|_| None,
@@ -368,7 +370,7 @@ mod tests {
         let due: Vec<usize> = (0..23).filter(|&i| ticks[i]).collect();
         assert_eq!(due, [1, 21]);
         m.extra.color = 0;
-        choose(&mut m, &t, &data, None, 0, &|_| None);
+        choose(&mut m, &t, &data, &Default::default(), None, 0, &|_| None);
         let sheep2 = variant("entity/sheep/sheep2");
         assert_eq!(texture(&m, &t, SHEEP), Some(sheep2.as_str()));
         // Another scan (a pack reload): nothing until chosen again, at once, from the same
@@ -382,7 +384,15 @@ mod tests {
         );
         assert_eq!(texture(&m, &reloaded, SHEEP), None);
         assert!(m.random_textures.due(&reloaded, m.id));
-        choose(&mut m, &reloaded, &data, None, 0, &|_| None);
+        choose(
+            &mut m,
+            &reloaded,
+            &data,
+            &Default::default(),
+            None,
+            0,
+            &|_| None,
+        );
         assert_eq!(texture(&m, &reloaded, SHEEP), Some(sheep2.as_str()));
     }
 
@@ -405,7 +415,15 @@ mod tests {
         let data = data();
         for biome in ["minecraft:plains", "minecraft:forest"] {
             let mut m = mob(Species::Sheep);
-            choose(&mut m, &t, &data, Some(seen(biome)), 0, &|_| None);
+            choose(
+                &mut m,
+                &t,
+                &data,
+                &Default::default(),
+                Some(seen(biome)),
+                0,
+                &|_| None,
+            );
             assert_eq!(texture(&m, &t, SHEEP), None, "{biome}");
             assert_eq!(texture(&m, &t, WOOL), None, "{biome}");
         }
@@ -426,6 +444,7 @@ mod tests {
             &mut m,
             &t,
             &data,
+            &Default::default(),
             Some(seen("minecraft:desert")),
             0,
             &|_| None,
@@ -437,6 +456,7 @@ mod tests {
             &mut m,
             &t,
             &data,
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &|_| None,
@@ -444,7 +464,15 @@ mod tests {
         assert_eq!(texture(&m, &t, SHEEP), Some(sheep2.as_str()));
         // Without a first sighting nothing is chosen.
         let mut unseen = mob(Species::Sheep);
-        choose(&mut unseen, &t, &data, None, 0, &|_| None);
+        choose(
+            &mut unseen,
+            &t,
+            &data,
+            &Default::default(),
+            None,
+            0,
+            &|_| None,
+        );
         assert_eq!(texture(&unseen, &t, SHEEP), None);
     }
 
@@ -474,6 +502,7 @@ mod tests {
             &mut m,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &|_| Some([1, 2, 3, 4]),
@@ -481,7 +510,9 @@ mod tests {
         let third = variant("entity/wolf/wolf_chestnut3");
         assert_eq!(texture(&m, &t, body), Some(third.as_str()));
         m.custom_name = Some("Rex".into());
-        choose(&mut m, &t, &data(), None, 0, &|_| Some([1, 2, 3, 4]));
+        choose(&mut m, &t, &data(), &Default::default(), None, 0, &|_| {
+            Some([1, 2, 3, 4])
+        });
         let fourth = variant("entity/wolf/wolf_chestnut4");
         assert_eq!(texture(&m, &t, body), Some(fourth.as_str()));
     }
@@ -510,6 +541,7 @@ nbt.1.angry_at=exists:true",
             &mut m,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &uuids,
@@ -517,7 +549,7 @@ nbt.1.angry_at=exists:true",
         let angry = variant("entity/wolf/wolf_chestnut2");
         assert_eq!(texture(&m, &t, body), Some(angry.as_str()));
         // A target the world has no UUID for isn't written, so the rule doesn't match.
-        choose(&mut m, &t, &data(), None, 0, &|_| None);
+        choose(&mut m, &t, &data(), &Default::default(), None, 0, &|_| None);
         assert_ne!(texture(&m, &t, body), Some(angry.as_str()));
     }
 
@@ -538,6 +570,7 @@ nbt.1.angry_at=exists:true",
             &mut m,
             &t,
             &data,
+            &Default::default(),
             Some(seen("minecraft:plains")),
             4,
             &|_| None,
@@ -545,7 +578,7 @@ nbt.1.angry_at=exists:true",
         // 4 % 3 + 1 = 2.
         let wool2 = variant("entity/sheep/sheep_wool2");
         assert_eq!(texture(&m, &t, WOOL), Some(wool2.as_str()));
-        choose(&mut m, &t, &data, None, 5, &|_| None);
+        choose(&mut m, &t, &data, &Default::default(), None, 5, &|_| None);
         // 5 % 3 + 1 = 3: there is no sheep_wool3, so the wool is vanilla's.
         let sheep3 = variant("entity/sheep/sheep3");
         assert_eq!(texture(&m, &t, SHEEP), Some(sheep3.as_str()));
@@ -568,6 +601,7 @@ nbt.1.angry_at=exists:true",
             &mut m,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:deep_dark")),
             0,
             &|_| None,
@@ -595,6 +629,7 @@ nbt.1.angry_at=exists:true",
             &mut m,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &|_| None,
@@ -641,6 +676,7 @@ nbt.1.angry_at=exists:true",
             &mut plains,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &|_| None,
@@ -651,6 +687,7 @@ nbt.1.angry_at=exists:true",
             &mut desert,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:desert")),
             0,
             &|_| None,
@@ -678,6 +715,7 @@ nbt.1.angry_at=exists:true",
             &mut m,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:plains")),
             2,
             &|_| None,
@@ -686,7 +724,7 @@ nbt.1.angry_at=exists:true",
         let plains3 = variant("entity/villager/type/plains3");
         assert_eq!(texture(&m, &t, plains), Some(plains3.as_str()));
         // Seed 3: the body's 2 would give plains2; the layer's own 1 + 3 % 3 = 1 is itself.
-        choose(&mut m, &t, &data(), None, 3, &|_| None);
+        choose(&mut m, &t, &data(), &Default::default(), None, 3, &|_| None);
         let villager2 = variant("entity/villager/villager2");
         assert_eq!(
             texture(&m, &t, "entity/villager/villager"),
@@ -729,6 +767,7 @@ nbt.1.angry_at=exists:true",
             &mut m,
             &t,
             &data(),
+            &Default::default(),
             Some(seen("minecraft:plains")),
             0,
             &|_| None,
@@ -739,7 +778,7 @@ nbt.1.angry_at=exists:true",
             Some(villager2.as_str())
         );
         m.extra.villager_level = 2;
-        choose(&mut m, &t, &data(), None, 0, &|_| None);
+        choose(&mut m, &t, &data(), &Default::default(), None, 0, &|_| None);
         assert_eq!(texture(&m, &t, "entity/villager/villager"), None);
     }
 

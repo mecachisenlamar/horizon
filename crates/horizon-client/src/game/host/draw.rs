@@ -113,6 +113,9 @@ impl DrawContext for GameDrawContext<'_, '_> {
         self.game
             .native_draw_menu_background(&mut *self.surface, rect, in_world)
     }
+    fn blur_behind(&mut self) {
+        self.game.native_blur_behind(&mut *self.surface)
+    }
     fn tiled_sprite(&mut self, sprite: &str, rect: [f32; 4], size: f32, argb: u32) -> bool {
         self.game
             .native_tiled_sprite(&mut *self.surface, sprite, rect, size, argb)
@@ -320,6 +323,12 @@ impl WorldDrawContext for GameWorldDrawContext<'_, '_> {
     }
     fn quads(&mut self, quads: &[WorldQuad]) -> Result<(), DrawError> {
         self.game.native_world_draw_quads(&mut *self.surface, quads)
+    }
+    fn beam(&mut self, beam: &WorldBeam) -> Result<(), DrawError> {
+        self.game.native_world_draw_beam(&mut *self.surface, beam)
+    }
+    fn text(&mut self, text: &WorldText) -> Result<(), DrawError> {
+        self.game.native_world_draw_text(&mut *self.surface, text)
     }
     fn pipeline_quads(
         &mut self,

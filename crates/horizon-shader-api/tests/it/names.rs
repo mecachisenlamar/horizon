@@ -353,6 +353,28 @@ reads = [\"r\"]
     }
 }
 
+#[test]
+fn opaque_post_inputs_require_the_manifest_opt_in() {
+    let shader = "fn post(input: PostInput) -> vec4<f32> {
+        let texel = vec2<i32>(input.uv * vec2<f32>(textureDimensions(opaque_color)));
+        return vec4<f32>(textureLoad(opaque_color, texel, 0).rgb, textureLoad(opaque_depth, texel, 0));
+    }";
+    let ordinary = pack(Some(("post.wgsl", shader)));
+    assert!(check(&ordinary).is_err());
+
+    let mut files = ordinary.files;
+    files
+        .get_mut(MANIFEST)
+        .unwrap()
+        .splice(..0, *b"post_opaque = true\n");
+    assert!(check(&Pack::from_files(files).unwrap()).is_ok());
+
+    // The old name remains available to a pack that didn't declare the opt-in.
+    let own = "const opaque_color = vec4<f32>(0.5);
+        fn post(input: PostInput) -> vec4<f32> { return input.color * opaque_color; }";
+    assert!(check(&pack(Some(("post.wgsl", own)))).is_ok());
+}
+
 /// `[motion]` brings the post stage the motion guide's names, `post_motion.txt`, and no others.
 #[test]
 fn motion_brings_the_post_stage_only_the_motion_names() {
@@ -379,7 +401,7 @@ fn motion_brings_the_post_stage_only_the_motion_names() {
 /// that keeps resources, and to no other pack.
 #[test]
 fn kept_resources_bring_the_frame_s_epochs_to_their_pack_only() {
-    let epochs = "    view_epoch: u32,\n    world_epoch: u32,\n    reset_reasons: u32,\n}";
+    let epochs = "    view_epoch: u32,\n    world_epoch: u32,\n    reset_reasons: u32,\n";
     let resource =
         "[[resource]]\nname = \"cells\"\nbuffer = 64\nelement = \"u32\"\nkeep = \"view\"\n";
     let reasons = [
@@ -448,9 +470,8 @@ fn ray_entity_comes_to_the_traced_stages_of_the_pack_that_names_it() {
     }
 }
 
-/// `[frame] fog = "pack"` brings `vanilla_fog` and the frame's fog distances to every stage of
-/// its pack, with `[[resource]]` or without; `[material] fog = false`, from before, brings
-/// nothing.
+/// The frame's fog distances are every pack's, last; `[frame] fog = "pack"` brings
+/// `vanilla_fog` to every stage of its pack, with `[[resource]]` or without.
 #[test]
 fn pack_fog_brings_vanilla_fog_to_every_stage_of_its_pack_only() {
     let key = "[frame]\nfog = \"pack\"\n";
@@ -463,7 +484,9 @@ fn pack_fog_brings_vanilla_fog_to_every_stage_of_its_pack_only() {
             let file = format!("{}.wgsl", kind.name());
             let composed = compose(&fogged, kind, &file);
             assert!(composed.text.contains(fields), "{kind:?}");
-            let without = prelude_names(&compose(&pack_with(kept, None), kind, &file), kind);
+            let plain = compose(&pack_with(kept, None), kind, &file);
+            assert!(plain.text.contains(fields), "{kind:?}");
+            let without = prelude_names(&plain, kind);
             let mut want = without;
             want.insert("vanilla_fog".to_owned());
             assert_eq!(prelude_names(&composed, kind), want, "{kind:?}");
@@ -479,28 +502,11 @@ fn pack_fog_brings_vanilla_fog_to_every_stage_of_its_pack_only() {
     for (file, text) in [("material.wgsl", material), ("post.wgsl", post)] {
         check(&pack_with(key, Some((file, text)))).unwrap();
         check(&pack_with(&format!("{resource}{key}"), Some((file, text)))).unwrap();
-        // A pack without the key has neither.
+        // A pack without the key hasn't `vanilla_fog`.
         let problems = messages(check(&pack(Some((file, text)))));
         assert!(
             problems.iter().any(|p| p.contains("vanilla_fog")),
             "{problems:#?}"
-        );
-    }
-    // The material's own switch from before turns no names on: every prelude is as without it.
-    let mut files = pack(None).files;
-    let manifest = String::from_utf8(files[MANIFEST].clone()).unwrap().replace(
-        "[material]\nfile = \"material.wgsl\"\n",
-        "[material]\nfile = \"material.wgsl\"\nfog = false\n",
-    );
-    files.insert(MANIFEST.into(), manifest.into_bytes());
-    let own = Pack::from_files(files).unwrap();
-    assert!(!check(&own).unwrap().material_fog);
-    for kind in StageKind::ALL {
-        let file = format!("{}.wgsl", kind.name());
-        assert_eq!(
-            compose(&own, kind, &file).text,
-            compose(&pack(None), kind, &file).text,
-            "{kind:?}"
         );
     }
 }
